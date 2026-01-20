@@ -50,9 +50,96 @@ def get_weather_forecast(location: str, days: int = 3) -> Dict[str, Any]:
             ]
         }
     """
-    # Mock weather API or call OpenWeatherMap or similar
-    
-    return 
+    # Limit days to 1-7 range
+    days = max(1, min(7, days))
+
+    # Weather conditions with their solar irradiance ranges (W/m²)
+    weather_types = {
+        "sunny": {"irradiance_range": (800, 1000), "weight": 0.4},
+        "partly_cloudy": {"irradiance_range": (400, 700), "weight": 0.35},
+        "cloudy": {"irradiance_range": (100, 350), "weight": 0.2},
+        "rainy": {"irradiance_range": (50, 150), "weight": 0.05}
+    }
+
+    # Current weather conditions
+    current_condition = random.choices(
+        list(weather_types.keys()),
+        weights=[w["weight"] for w in weather_types.values()]
+    )[0]
+
+    current_temp = random.uniform(15, 28)
+    current_humidity = random.randint(40, 80)
+    current_wind_speed = random.uniform(5, 25)
+
+    forecast = {
+        "location": location,
+        "forecast_days": days,
+        "current": {
+            "temperature_c": round(current_temp, 1),
+            "condition": current_condition,
+            "humidity": current_humidity,
+            "wind_speed": round(current_wind_speed, 1)
+        },
+        "hourly": [],
+        "daily": []
+    }
+
+    # Generate hourly forecast for each day
+    for day in range(days):
+        day_condition = random.choices(
+            list(weather_types.keys()),
+            weights=[w["weight"] for w in weather_types.values()]
+        )[0]
+
+        daily_temps = []
+        daily_generation_potential = 0
+
+        for hour in range(24):
+            # Temperature varies throughout the day (cooler at night, warmer midday)
+            hour_factor = 1 - abs(hour - 14) / 14  # Peak at 2 PM
+            base_temp = 12 + random.uniform(-2, 2)  # Night base
+            temp_range = 15  # Day-night difference
+            temp = base_temp + (temp_range * hour_factor)
+            daily_temps.append(temp)
+
+            # Determine hourly condition (mostly consistent with daily condition)
+            if random.random() < 0.8:  # 80% chance to match daily condition
+                hourly_condition = day_condition
+            else:
+                hourly_condition = random.choice(list(weather_types.keys()))
+
+            # Solar irradiance - only during daylight hours (6 AM to 8 PM)
+            if 6 <= hour <= 20:
+                # Peak solar at noon
+                solar_factor = max(0, 1 - abs(hour - 13) / 7)
+                irr_range = weather_types[hourly_condition]["irradiance_range"]
+                base_irradiance = random.uniform(irr_range[0], irr_range[1])
+                solar_irradiance = round(base_irradiance * solar_factor, 1)
+                daily_generation_potential += solar_irradiance / 1000  # kWh estimate
+            else:
+                solar_irradiance = 0
+
+            forecast["hourly"].append({
+                "day": day,
+                "hour": hour,
+                "temperature_c": round(temp, 1),
+                "condition": hourly_condition,
+                "solar_irradiance": solar_irradiance,
+                "humidity": random.randint(35, 85),
+                "wind_speed": round(random.uniform(3, 20), 1)
+            })
+
+        # Daily summary
+        forecast["daily"].append({
+            "day": day,
+            "date": (datetime.now() + timedelta(days=day)).strftime("%Y-%m-%d"),
+            "condition": day_condition,
+            "high_temp_c": round(max(daily_temps), 1),
+            "low_temp_c": round(min(daily_temps), 1),
+            "solar_generation_potential_kwh": round(daily_generation_potential, 2)
+        })
+
+    return forecast
 
 # TODO: Implement get_electricity_prices tool
 @tool
@@ -84,13 +171,58 @@ def get_electricity_prices(date: str = None) -> Dict[str, Any]:
     if date is None:
         date = datetime.now().strftime("%Y-%m-%d")
     
-    # Mock electricity pricing - in real implementation, this would call a pricing API
-    # Use a base price per kWh    
-    # Then generate hourly rates with peak/off-peak pricing
-    # Peak normally between 6 and 22...
-    # demand_charge should be 0 if off-peak
+    # Base prices per kWh for different periods (typical California TOU rates)
+    pricing_tiers = {
+        "off_peak": {"rate": 0.10, "hours": list(range(0, 6)) + list(range(23, 24))},  # 11 PM - 6 AM
+        "partial_peak": {"rate": 0.15, "hours": list(range(6, 16)) + list(range(21, 23))},  # 6 AM - 4 PM, 9 PM - 11 PM
+        "peak": {"rate": 0.25, "hours": list(range(16, 21))}  # 4 PM - 9 PM
+    }
 
-    return 
+    prices = {
+        "date": date,
+        "pricing_type": "time_of_use",
+        "currency": "USD",
+        "unit": "per_kWh",
+        "hourly_rates": [],
+        "summary": {
+            "off_peak_rate": 0.10,
+            "partial_peak_rate": 0.15,
+            "peak_rate": 0.25,
+            "off_peak_hours": "11 PM - 6 AM",
+            "partial_peak_hours": "6 AM - 4 PM, 9 PM - 11 PM",
+            "peak_hours": "4 PM - 9 PM"
+        }
+    }
+
+    for hour in range(24):
+        # Determine which period this hour falls into
+        period = "partial_peak"  # Default
+        rate = 0.15
+        demand_charge = 0.0
+
+        for tier_name, tier_info in pricing_tiers.items():
+            if hour in tier_info["hours"]:
+                period = tier_name
+                rate = tier_info["rate"]
+                break
+
+        # Add demand charge during peak hours
+        if period == "peak":
+            demand_charge = 0.05  # Additional demand charge during peak
+
+        # Add slight random variation to simulate real-world fluctuations
+        rate_variation = random.uniform(-0.01, 0.01)
+        final_rate = round(rate + rate_variation, 3)
+
+        prices["hourly_rates"].append({
+            "hour": hour,
+            "rate": final_rate,
+            "period": period,
+            "demand_charge": demand_charge,
+            "total_rate": round(final_rate + demand_charge, 3)
+        })
+
+    return prices
 
 @tool
 def query_energy_usage(start_date: str, end_date: str, device_type: str = None) -> Dict[str, Any]:
