@@ -116,24 +116,23 @@ class DocumentAssistant:
     def process_message(self, user_input: str) -> Dict[str, Any]:
         """Process a user message using the LangGraph workflow."""
 
-#TODO: Complete the config dictionary to set the thread_ud, llm, and tools to the workflow
-        # Refer to README.md Task 2.6 for details
+        if not self.current_session:
+            raise ValueError("No active session. Call start_session() first.")
+
+        # Task 2.6: Complete the config dictionary
         config = {
             "configurable": {
-                "thread_id": # TODO: Set this to the session id of the current sessions
-                "llm": # TODO Set this to the LLM instance (self.llm)
-                "tools": # TODO Set this to the list of tools
+                "thread_id": self.current_session.session_id,
+                "llm": self.llm,
+                "tools": self.tools
             }
         }
 
-        if not self.current_session:
-            raise ValueError("No active session. Call start_session() first.")
         initial_state: AgentState = {
             "messages": [],
             "user_input": user_input,
             "intent": None,
             "next_step": "classify_intent",
-            "conversation_history": self.current_session.conversation_history,
             "conversation_summary": self._get_conversation_summary(config),
             "active_documents": self.current_session.document_context,
             "current_response": None,

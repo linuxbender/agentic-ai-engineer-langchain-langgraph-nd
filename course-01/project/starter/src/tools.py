@@ -59,15 +59,102 @@ class ToolLogger:
             json.dump(self.logs, f, indent=2)
 
 
-# TODO: Implement the calculator tool using the @tool decorator.
-# This tool should safely evaluate mathematical expressions and log its usage.
-# Refer to README.md Task 4.1 for detailed implementation requirements.
+# Task 4.1: Implement the calculator tool using the @tool decorator.
 def create_calculator_tool(logger: ToolLogger):
     """
-    Creates a calculator tool - TO BE IMPLEMENTED
+    Creates a calculator tool that safely evaluates mathematical expressions.
     """
-    # Your implementation here
-    pass
+
+    @tool
+    def calculator(expression: str) -> str:
+        """
+        Safely evaluate a mathematical expression and return the result.
+
+        Args:
+            expression: A mathematical expression to evaluate (e.g., "2 + 2", "100 * 0.1", "50000 + 69300 + 214500")
+
+        Returns:
+            The result of the calculation as a formatted string, or an error message if the expression is invalid.
+
+        Examples:
+            - "2 + 2" → "Result: 4"
+            - "100 * 0.1" → "Result: 10.0"
+            - "50000 + 69300" → "Result: 119300"
+        """
+        try:
+            # Clean the expression - remove currency symbols and commas
+            cleaned_expression = expression.replace('$', '').replace(',', '').strip()
+
+            # Validate the expression for safety - only allow basic math operations
+            # Allow: digits, decimal points, basic operators, parentheses, spaces
+            allowed_pattern = r'^[\d\s\+\-\*\/\(\)\.\%]+$'
+            if not re.match(allowed_pattern, cleaned_expression):
+                error_msg = f"Invalid expression: '{expression}'. Only numbers and basic math operators (+, -, *, /, %, parentheses) are allowed."
+                logger.log_tool_use(
+                    "calculator",
+                    {"expression": expression},
+                    {"error": error_msg}
+                )
+                return error_msg
+
+            # Additional safety check - prevent dangerous operations
+            if any(keyword in cleaned_expression.lower() for keyword in ['import', 'exec', 'eval', 'open', '__']):
+                error_msg = "Invalid expression: potentially unsafe operation detected."
+                logger.log_tool_use(
+                    "calculator",
+                    {"expression": expression},
+                    {"error": error_msg}
+                )
+                return error_msg
+
+            # Evaluate the expression
+            result = eval(cleaned_expression)
+
+            # Format the result
+            if isinstance(result, float):
+                # Check if it's effectively an integer
+                if result == int(result):
+                    formatted_result = f"Result: {int(result):,}"
+                else:
+                    formatted_result = f"Result: {result:,.2f}"
+            else:
+                formatted_result = f"Result: {result:,}"
+
+            # Log the successful calculation
+            logger.log_tool_use(
+                "calculator",
+                {"expression": expression, "cleaned_expression": cleaned_expression},
+                {"result": result}
+            )
+
+            return formatted_result
+
+        except ZeroDivisionError:
+            error_msg = "Error: Division by zero is not allowed."
+            logger.log_tool_use(
+                "calculator",
+                {"expression": expression},
+                {"error": error_msg}
+            )
+            return error_msg
+        except SyntaxError:
+            error_msg = f"Error: Invalid mathematical expression syntax: '{expression}'"
+            logger.log_tool_use(
+                "calculator",
+                {"expression": expression},
+                {"error": error_msg}
+            )
+            return error_msg
+        except Exception as e:
+            error_msg = f"Error evaluating expression: {str(e)}"
+            logger.log_tool_use(
+                "calculator",
+                {"expression": expression},
+                {"error": error_msg}
+            )
+            return error_msg
+
+    return calculator
 
 
 def create_document_search_tool(retriever, logger: ToolLogger):
